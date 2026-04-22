@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Daisi.Llogos.Cpu;
 using Daisi.Llogos.Cuda;
+using Daisi.Llogos.Metal;
 using Daisi.Llogos.Vulkan;
 using Daisi.Llogos.Gguf;
 using Daisi.Llogos.Inference;
@@ -19,6 +20,15 @@ if (args.Length > 0 && args[0] == "train")
 if (args.Length > 0 && args[0] == "split")
 {
     return RunSplit(args[1..]);
+}
+if (args.Length > 0 && args[0] == "metal-bench")
+{
+    Daisi.Llogos.Metal.MetalBench.Run();
+    return 0;
+}
+if (args.Length > 0 && args[0] == "metal-diff")
+{
+    return RunMetalDiff(args[1..]);
 }
 
 // Parse arguments
@@ -47,6 +57,7 @@ IComputeBackend backend = options.Backend switch
 {
     "cuda" => new CudaBackend(),
     "vulkan" => new VulkanBackend(),
+    "metal" => new MetalBackend(),
     _ => new CpuBackend(),
 };
 
@@ -794,6 +805,94 @@ static int RunTraining(string[] args)
 
     using var session = new TrainingSession(config, trainingBackend);
     session.Run();
+    return 0;
+}
+
+// ── metal-diff: compare per-op vs batched forward pass layer-by-layer ──
+static int RunMetalDiff(string[] args)
+{
+    string? modelPath = null;
+    string prompt = "Hello";
+    int tokenCount = 1;
+    for (int i = 0; i < args.Length; i++)
+    {
+        if (args[i] == "--model" && i + 1 < args.Length) modelPath = args[++i];
+        else if (args[i] == "--prompt" && i + 1 < args.Length) prompt = args[++i];
+        else if (args[i] == "--tokens" && i + 1 < args.Length) tokenCount = int.Parse(args[++i]);
+    }
+    if (modelPath == null) { Console.Error.WriteLine("metal-diff requires --model"); return 1; }
+
+    Dictionary<string, double[]>? lastPerOp = null;
+
+    double[] RunOnce(bool batched)
+    {
+        Environment.SetEnvironmentVariable("DAISI_METAL_BATCH", batched ? "1" : "0");
+        Environment.SetEnvironmentVariable("DAISI_METAL_BATCH_SIZE", batched ? "1000000" : "");
+        using var stream = File.OpenRead(modelPath);
+        var gguf = GgufFile.Read(stream);
+        var config = ModelConfig.FromGguf(gguf);
+        using var backend = new MetalBackend();
+        var weights = MmapModelLoader.Load(gguf, modelPath, backend, config);
+        var tokenizer = TokenizerFactory.FromGguf(gguf);
+        var kvCache = new KvCache(backend, config, maxSeqLen: 2048);
+        var dnState = new DeltaNetState(backend, config);
+        using var forward = new ForwardPass(backend, config, weights, kvCache, dnState);
+
+        var tokenIds = tokenizer.Encode(prompt);
+        var perLayerResults = new List<(int layer, string tag, float[] data)>();
+        ForwardPass.DebugHook = (layer, tag, tensor) =>
+        {
+            var buf = new float[tensor.ElementCount];
+            tensor.DequantizeTo(buf);
+            perLayerResults.Add((layer, tag, buf));
+        };
+
+        try
+        {
+            // Prefill, then decode 1 token
+            for (int i = 0; i < tokenIds.Length - 1; i++)
+                forward.ForwardHidden(tokenIds[i], i);
+            var logits = forward.Forward(tokenIds[tokenIds.Length - 1], tokenIds.Length - 1).ToArray();
+
+            // Report hash per layer
+            double[] hashes = new double[perLayerResults.Count];
+            for (int i = 0; i < perLayerResults.Count; i++)
+            {
+                var (layer, tag, buf) = perLayerResults[i];
+                // Compute max, min, L2 norm
+                double sumSq = 0; float min = float.MaxValue, max = float.MinValue;
+                for (int j = 0; j < buf.Length; j++)
+                {
+                    sumSq += (double)buf[j] * buf[j];
+                    if (buf[j] < min) min = buf[j];
+                    if (buf[j] > max) max = buf[j];
+                }
+                hashes[i] = Math.Sqrt(sumSq);
+                Console.WriteLine($"[{(batched ? "batched" : "per-op")}] layer={layer} tag={tag} L2={hashes[i]:G6} min={min:G4} max={max:G4} first={buf[0]:G6} last={buf[buf.Length - 1]:G6}");
+            }
+            return hashes;
+        }
+        finally
+        {
+            ForwardPass.DebugHook = null;
+            weights.Dispose();
+            kvCache.Dispose();
+            dnState.Dispose();
+        }
+    }
+
+    Console.WriteLine("=== Running per-op (batch=0) ===");
+    var perOp = RunOnce(false);
+    Console.WriteLine("=== Running batched (batch=1, size=1000000) ===");
+    var batched = RunOnce(true);
+
+    Console.WriteLine("=== Diff ===");
+    for (int i = 0; i < Math.Min(perOp.Length, batched.Length); i++)
+    {
+        double rel = Math.Abs(perOp[i] - batched[i]) / Math.Max(1e-9, Math.Abs(perOp[i]));
+        string marker = rel > 1e-3 ? " <<< DIVERGES" : "";
+        Console.WriteLine($"  layer {i}  per-op={perOp[i]:G6}  batched={batched[i]:G6}  relDiff={rel:G4}{marker}");
+    }
     return 0;
 }
 

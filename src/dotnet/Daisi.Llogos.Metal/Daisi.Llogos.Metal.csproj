@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Daisi.Llogos.Metal</RootNamespace>
+    <AssemblyName>Daisi.Llogos.Metal</AssemblyName>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Daisi.Llogos.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Daisi.Llogos\Daisi.Llogos.csproj" />
+    <ProjectReference Include="..\Daisi.Llogos.Cpu\Daisi.Llogos.Cpu.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="shaders\*.metal" LogicalName="%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>
