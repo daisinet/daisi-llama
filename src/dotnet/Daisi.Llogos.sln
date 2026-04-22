@@ -17,6 +17,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Daisi.Llogos.Vulkan", "Dais
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Daisi.Llogos.Training", "Daisi.Llogos.Training\Daisi.Llogos.Training.csproj", "{B3D4E5F6-1234-5678-9ABC-DEF012345678}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Daisi.Llogos.TelosDistill", "Daisi.Llogos.TelosDistill\Daisi.Llogos.TelosDistill.csproj", "{1CA3435A-653C-4FF4-B296-4301923F9F8B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -111,10 +113,20 @@ Global
 		{B3D4E5F6-1234-5678-9ABC-DEF012345678}.Release|x64.Build.0 = Release|Any CPU
 		{B3D4E5F6-1234-5678-9ABC-DEF012345678}.Release|x86.ActiveCfg = Release|Any CPU
 		{B3D4E5F6-1234-5678-9ABC-DEF012345678}.Release|x86.Build.0 = Release|Any CPU
+		{1CA3435A-653C-4FF4-B296-4301923F9F8B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1CA3435A-653C-4FF4-B296-4301923F9F8B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1CA3435A-653C-4FF4-B296-4301923F9F8B}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{1CA3435A-653C-4FF4-B296-4301923F9F8B}.Debug|x64.Build.0 = Debug|Any CPU
+		{1CA3435A-653C-4FF4-B296-4301923F9F8B}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{1CA3435A-653C-4FF4-B296-4301923F9F8B}.Debug|x86.Build.0 = Debug|Any CPU
+		{1CA3435A-653C-4FF4-B296-4301923F9F8B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1CA3435A-653C-4FF4-B296-4301923F9F8B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1CA3435A-653C-4FF4-B296-4301923F9F8B}.Release|x64.ActiveCfg = Release|Any CPU
+		{1CA3435A-653C-4FF4-B296-4301923F9F8B}.Release|x64.Build.0 = Release|Any CPU
+		{1CA3435A-653C-4FF4-B296-4301923F9F8B}.Release|x86.ActiveCfg = Release|Any CPU
+		{1CA3435A-653C-4FF4-B296-4301923F9F8B}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
-	EndGlobalSection
-	GlobalSection(NestedProjects) = preSolution
 	EndGlobalSection
 EndGlobal

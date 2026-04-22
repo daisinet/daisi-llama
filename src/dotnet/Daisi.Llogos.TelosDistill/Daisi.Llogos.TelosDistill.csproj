@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Daisi.Llogos.TelosDistill</RootNamespace>
+    <AssemblyName>telos-distill</AssemblyName>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Daisi.Llogos\Daisi.Llogos.csproj" />
+    <ProjectReference Include="..\Daisi.Llogos.Cpu\Daisi.Llogos.Cpu.csproj" />
+    <ProjectReference Include="..\Daisi.Llogos.Cuda\Daisi.Llogos.Cuda.csproj" />
+  </ItemGroup>
+</Project>
