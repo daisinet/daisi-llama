@@ -9,6 +9,7 @@
     <ProjectReference Include="..\Daisi.Llogos.Cpu\Daisi.Llogos.Cpu.csproj" />
     <ProjectReference Include="..\Daisi.Llogos.Cuda\Daisi.Llogos.Cuda.csproj" />
     <ProjectReference Include="..\Daisi.Llogos.Vulkan\Daisi.Llogos.Vulkan.csproj" />
+    <ProjectReference Include="..\Daisi.Llogos.Metal\Daisi.Llogos.Metal.csproj" />
     <ProjectReference Include="..\Daisi.Llogos.Training\Daisi.Llogos.Training.csproj" />
   </ItemGroup>
 </Project>

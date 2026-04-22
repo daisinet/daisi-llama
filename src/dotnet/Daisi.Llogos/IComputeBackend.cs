@@ -190,6 +190,17 @@ public interface IComputeBackend : IDisposable
     void CausalConv1d(ITensor qkv, ITensor convBuffer, ITensor convWeight, int channels, int kernelSize);
 
     /// <summary>
+    /// Fused CausalConv1d + in-place SiLU on the qkv buffer. ForwardPass
+    /// always does these back-to-back in the DeltaNet path — fusing saves
+    /// a dispatch and keeps the conv result in register between ops.
+    /// </summary>
+    void CausalConv1dSiLU(ITensor qkv, ITensor convBuffer, ITensor convWeight, int channels, int kernelSize)
+    {
+        CausalConv1d(qkv, convBuffer, convWeight, channels, kernelSize);
+        SiLUInPlace(qkv);
+    }
+
+    /// <summary>
     /// Compute DeltaNet decay and beta from alpha projection, ssmA, dt_bias.
     /// decay[g] = exp(ssmA[g] * softplus(alpha[g] + dtBias[g]))
     /// beta[g] = sigmoid(betaProj[g])
@@ -279,6 +290,41 @@ public interface IComputeBackend : IDisposable
     /// </summary>
     /// <summary>Whether this backend supports batched prefill operations (CopyTensorSlice, etc.).</summary>
     bool SupportsBatchedOps => false;
+
+    /// <summary>
+    /// Whether this backend has a fused batched DeltaNet prefill kernel that
+    /// does conv1d+SiLU, split/L2norm/decay/step/gate in M-loop-per-TG form.
+    /// When true, ForwardBatchedPrefill replaces the per-token DeltaNet loop
+    /// with a single dispatch per layer.
+    /// </summary>
+    bool SupportsFusedDeltaNetPrefill => false;
+
+    /// <summary>
+    /// Batched causal conv1d + SiLU: loops M tokens internally. qkv layout
+    /// is [M × channels]; convBuf is persistent per-channel history
+    /// [(kernelSize-1) × channels]. Writes qkv in-place with SiLU applied.
+    /// </summary>
+    void BatchedCausalConv1dSiLU(ITensor qkv, ITensor convBuf, ITensor convWeight,
+        int channels, int kernelSize, int M)
+    {
+        throw new NotSupportedException("BatchedCausalConv1dSiLU not implemented by this backend.");
+    }
+
+    /// <summary>
+    /// Batched fused DeltaNet: for each of numVHeads heads, processes all M
+    /// tokens sequentially in a single TG, keeping per-head state in
+    /// threadgroup memory. Replaces the per-token loop of split/L2norm/
+    /// repeat/decay/step/silugate.
+    /// </summary>
+    void BatchedDeltaNetFused(
+        ITensor output, ITensor qkv, ITensor alpha, ITensor beta,
+        ITensor gate, ITensor state, ITensor ssmA, ITensor dtBias, ITensor ssmNorm,
+        int M, int qkvOutDim, int keyDim, int valueDim,
+        int numKHeads, int numVHeads, int headDim,
+        float scale, float normEps)
+    {
+        throw new NotSupportedException("BatchedDeltaNetFused not implemented by this backend.");
+    }
 
     /// <summary>Wait for all pending operations to complete (for profiling). No-op on CPU.</summary>
     void Synchronize() { }
