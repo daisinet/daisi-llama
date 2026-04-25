@@ -118,6 +118,93 @@ public sealed class ModelHost : IDisposable
         }
     }
 
+    /// <summary>
+    /// Low-level: render (system, user) via the model's chat template, prefill the
+    /// KV cache with all tokens except the last, run a single forward on the last
+    /// token, and return the full-vocab logits as a newly-allocated float[].
+    ///
+    /// This is the soft-target distillation (M14 Mode 2) entry point — callers
+    /// pick the logits for the classes they care about (e.g. first-token ids for
+    /// PERMIT / DENY / AMBIGUOUS), softmax over just those, and emit the
+    /// resulting probability triple as a teacher row.
+    ///
+    /// Fresh KV cache + delta-state per call, matching <see cref="GenerateAsync"/>
+    /// so batched emission stays stateless across intents.
+    /// </summary>
+    public Task<float[]> FirstResponseLogitsAsync(
+        string systemPrompt, string userPrompt, CancellationToken ct = default)
+    {
+        return Task.Run(() =>
+        {
+            var kvCache = new KvCache(_backend, _config, _maxContext);
+            var deltaState = new DeltaNetState(_backend, _config, _weights);
+            var forward = new ForwardPass(_backend, _config, _weights, kvCache, deltaState);
+            try
+            {
+                var renderer = new ChatTemplateRenderer(_template);
+                var messages = new List<ChatMessage>();
+                if (!string.IsNullOrEmpty(systemPrompt))
+                    messages.Add(new ChatMessage("system", systemPrompt));
+                messages.Add(new ChatMessage("user", userPrompt));
+                // `addGenerationPrompt: true` appends the assistant-turn marker so the
+                // next token we predict is the first response token — exactly where
+                // the classifier's answer lives for a one-word completion prompt.
+                var rendered = renderer.Render(messages, addGenerationPrompt: true);
+                var tokenIds = _tokenizer.Encode(rendered);
+                if (tokenIds.Length == 0)
+                    throw new InvalidOperationException("empty tokenization of chat prompt");
+
+                int prefillEnd = tokenIds.Length - 1;
+                if (prefillEnd > 0 && forward.SupportsBatchedPrefill)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    forward.ForwardBatchedPrefill(tokenIds[..prefillEnd], 0);
+                }
+                else
+                {
+                    for (int i = 0; i < prefillEnd; i++)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        forward.ForwardHidden(tokenIds[i], i);
+                    }
+                }
+
+                ct.ThrowIfCancellationRequested();
+                var logits = forward.Forward(tokenIds[prefillEnd], prefillEnd);
+                return logits.ToArray();
+            }
+            finally
+            {
+                forward.Dispose();
+                deltaState.Dispose();
+                kvCache.Dispose();
+            }
+        }, ct);
+    }
+
+    /// <summary>
+    /// Resolve a candidate word to the single token id a teacher would emit as
+    /// the first response token. Tries several tokenizations (leading-space,
+    /// as-is, lowercase) and returns the first one that produces a single token.
+    /// Returns -1 when no candidate is a single token — the caller is expected
+    /// to fall back to an empirical-sampling path or to bail with a warning.
+    /// </summary>
+    public int ResolveSingleToken(params string[] candidates)
+    {
+        foreach (var cand in candidates)
+        {
+            if (string.IsNullOrEmpty(cand)) continue;
+            var ids = _tokenizer.Encode(cand);
+            if (ids.Length == 1) return ids[0];
+        }
+        return -1;
+    }
+
+    /// <summary>
+    /// Tokenizer access for callers that need to introspect the vocab.
+    /// </summary>
+    public BpeTokenizer Tokenizer => _tokenizer;
+
     public void Dispose()
     {
         _weights.Dispose();

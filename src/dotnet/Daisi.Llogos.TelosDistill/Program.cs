@@ -12,6 +12,7 @@ try
     {
         "generate" => await GenerateCommand.RunAsync(ParseGenerate(args[1..])),
         "verify" => await VerifyCommand.RunAsync(ParseVerify(args[1..])),
+        "distill-soft" => await DistillSoftCommand.RunAsync(ParseDistillSoft(args[1..])),
         _ => Unknown(args[0]),
     };
 }
@@ -56,6 +57,18 @@ static void PrintUsage()
               Report agreement rate vs. expected class (inferred from path if absent).
               Disagreements print to stderr and optionally to a TSV file.
 
+          telos-distill distill-soft --model <gguf> --in <intents-file>
+                                     --out <soft-file>
+                                     [--temperature F] [--sample N] [--seed N]
+                                     [--backend cpu|cuda] [--max-context N]
+                                     [--progress-every N]
+
+              M14 Mode 2. For each input intent, read the teacher's first-response-token
+              logits for PERMIT / DENY / AMBIGUOUS, apply temperature, softmax, and
+              append a `.soft` TSV row: `prompt<TAB>p_permit<TAB>p_deny<TAB>p_amb`.
+              The resulting file feeds `telos-train`'s `train_distill_soft` example
+              and `SoftTargetCorpus::load_from_file`.
+
         Examples:
           telos-distill generate --model C:/GGUFS/Qwen3.5-9B-BF16.gguf \
               --class deny --topic stepwise_bypass \
@@ -64,6 +77,10 @@ static void PrintUsage()
 
           telos-distill verify --model C:/GGUFS/Qwen3.5-9B-BF16.gguf \
               --in C:/telos/corpora/constitutional/v1/deny/bypass.txt --sample 30
+
+          telos-distill distill-soft --model C:/GGUFS/Qwen3.5-9B-BF16.gguf \
+              --in C:/telos/corpora/candidates.txt --out C:/telos/corpora/out.soft \
+              --temperature 2.0
         """);
 }
 
@@ -119,6 +136,31 @@ static VerifyOptions ParseVerify(string[] a)
     }
     Require(o.ModelPath, "--model");
     Require(o.InputFile, "--in");
+    return o;
+}
+
+static DistillSoftOptions ParseDistillSoft(string[] a)
+{
+    var o = new DistillSoftOptions();
+    for (int i = 0; i < a.Length; i++)
+    {
+        switch (a[i])
+        {
+            case "--model": o.ModelPath = Next(a, ref i); break;
+            case "--backend": o.Backend = Next(a, ref i); break;
+            case "--in" or "--input": o.InputFile = Next(a, ref i); break;
+            case "--out" or "--output": o.OutputFile = Next(a, ref i); break;
+            case "--sample": o.Sample = int.Parse(Next(a, ref i)); break;
+            case "--temperature" or "-t": o.Temperature = float.Parse(Next(a, ref i)); break;
+            case "--max-context": o.MaxContext = int.Parse(Next(a, ref i)); break;
+            case "--seed": o.Seed = int.Parse(Next(a, ref i)); break;
+            case "--progress-every": o.ProgressEvery = int.Parse(Next(a, ref i)); break;
+            default: throw new ArgumentException($"unknown flag: {a[i]}");
+        }
+    }
+    Require(o.ModelPath, "--model");
+    Require(o.InputFile, "--in");
+    Require(o.OutputFile, "--out");
     return o;
 }
 
