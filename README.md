@@ -1,3 +1,9 @@
+# DAISI has moved to [Daisi Git](https://git.daisi.ai/daisinet/daisi-llogos), a free and fast git management studio that we built from scratch in C#.
+## This code base is no longer kept up to date here.
+---
+
+
+
 # daisi-llogos
 
 **Run AI language models on any device** — your gaming PC, a server, or even a web browser. LLogos is an inference engine that takes a trained AI model file (in [GGUF format](docs/definitions.md#gguf-format)) and runs it to generate text, answer questions, or have conversations.
